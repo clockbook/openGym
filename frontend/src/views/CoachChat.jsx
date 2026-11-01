@@ -423,9 +423,10 @@ function ReviewCard({ p, S, update, toast, refresh }) {
         const res = applyChangeSet(s, marked, ids)
         appendChat(s, { role: 'coach', kind: 'applied', ref: res.logId, text: tn('Applied {0} change to your plan.', 'Applied {0} changes to your plan.', ids.length) })
       })
-      resolvePending({ accepted: ids, rejected: marked.changes.filter(c => !ids.includes(c.id)).map(c => c.id) }).catch(() => {})
+      // Refreshed once the server has let go of the proposal: asked before that, the status still
+      // carried it, and the card stayed on screen as stale until the next poll.
+      resolvePending({ accepted: ids, rejected: marked.changes.filter(c => !ids.includes(c.id)).map(c => c.id) }).catch(() => {}).finally(() => refresh())
       toast(tn('{0} change applied', '{0} changes applied', ids.length))
-      refresh()
     } catch (e) { toast(e.message || t('Could not apply those changes')) }
   }
   const discard = () => confirmSheet({
@@ -433,8 +434,7 @@ function ReviewCard({ p, S, update, toast, refresh }) {
     confirmText: t('Dismiss'), danger: true,
     onConfirm: () => {
       update(s => { const ref = recordDismissal(s, marked); appendChat(s, { role: 'coach', kind: 'dismissed', ref, text: t('Got it. I won’t suggest these again without new evidence.') }) })
-      resolvePending({ dismissed: true }).catch(() => {})
-      refresh()
+      resolvePending({ dismissed: true }).catch(() => {}).finally(() => refresh())
     }
   })
 
