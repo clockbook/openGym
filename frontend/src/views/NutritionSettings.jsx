@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
-import { fmtAgo, fmtNum } from '../lib/format.js'
+import { fmtAgo, fmtNum, fmtDate } from '../lib/format.js'
 import { Section, Row, Button, NumberField, Segmented, SelectRow, Switch, Stepper } from '../components/ui.jsx'
 import { rateGoalSheet } from '../components/WeightRate.jsx'
 import {
@@ -58,7 +58,7 @@ export default function NutritionSettingsPage() {
         value={n.main || ''} onChange={v => patch(x => { x.main = v || null })}
         options={[{ value: '', label: t('Automatic') }, ...sources.filter(x => x.src).map(x => ({ value: x.src, label: x.name }))]} />}
       {sources.length > 0 && <Row icon="list" iconTint="var(--grey)" title={t('Apps sending food')}
-        subtitle={sources.map(x => `${x.name}: ${x.first} – ${x.last}`).join('\n')} />}
+        subtitle={sources.map(x => `${x.name}: ${fmtDate(x.first)} – ${fmtDate(x.last)}`).join('\n')} />}
     </Section>
 
     <Section title={t('Targets')} footer={t('The weekly check-in suggests new targets in the Coach. Copy them into your food diary.')}>
@@ -76,22 +76,22 @@ export default function NutritionSettingsPage() {
 
     <Section title={t('About you')} footer={statsComplete(S) ? null : t('The first estimate of what you burn comes from these. After a few weeks of logging, your own data takes over.')}>
       <div className="lrow"><span className="lrow-m"><span className="lrow-t">{t('Sex')}</span></span>
-        <Segmented value={stats.sex || ''} onChange={v => setStat('sex', v)}
+        {/* Nothing picked yet shows no pill, rather than a first option that looks chosen. */}
+        <Segmented className={'nutr-sex' + (stats.sex ? '' : ' seg-none')} value={stats.sex || ''} onChange={v => setStat('sex', v)}
           options={[{ value: 'm', label: t('Male') }, { value: 'f', label: t('Female') }]} /></div>
       <div className="lrow"><span className="lrow-m"><span className="lrow-t">{t('Year of birth')}</span></span>
-        <NumberField value={stats.birthYear ?? null} nullable decimal={false} onChange={v => setStat('birthYear', v)} aria-label={t('Year of birth')} style={{ width: '6ch', textAlign: 'end' }} /></div>
+        <span className="measure-input nutr-num"><NumberField value={stats.birthYear ?? null} nullable decimal={false} onChange={v => setStat('birthYear', v)} aria-label={t('Year of birth')} placeholder="1990" /></span></div>
       <div className="lrow"><span className="lrow-m"><span className="lrow-t">{t('Height')}</span></span>
-        <NumberField value={stats.heightCm ?? null} nullable decimal={false} onChange={v => setStat('heightCm', v)} aria-label={t('Height')} style={{ width: '5ch', textAlign: 'end' }} /><span className="muted">cm</span></div>
+        <span className="measure-input nutr-num"><NumberField value={stats.heightCm ?? null} nullable decimal={false} onChange={v => setStat('heightCm', v)} aria-label={t('Height')} placeholder="178" /><i>cm</i></span></div>
       <SelectRow icon="figureRun" iconTint="var(--green)" title={t('Activity')} value={stats.activity || ''}
         onChange={v => setStat('activity', v)}
         options={Object.keys(ACTIVITY).map(k => ({ value: k, label: ACTIVITY_LABEL[k]() }))} />
     </Section>
 
-    <Section title={t('Goal')} footer={t('Calories follow your weekly rate, or your goal weight when no rate is set.')}>
+    <Section title={t('Goal')} footer={t('Calories follow your weekly rate, or your goal weight when no rate is set. Protein is per kg of body weight: 1.6 g is a good start for building muscle.')}>
       <Row icon="chartLine" iconTint="var(--teal)" title={t('Weekly rate')} accessory="chevron" onClick={rateGoalSheet}
-        value={engine ? t('{0} a week', (engine.goalRate > 0 ? '+' : '') + engine.goalRate + ' kg') : null} />
-      <div className="lrow"><span className="lrow-m"><span className="lrow-t">{t('Protein per kg')}</span>
-        <span className="lrow-s">{t('Of body weight. 1.6 g is a good start for building muscle.')}</span></span>
+        value={!S.rateGoal && !S.targetW ? t('Not set') : engine ? t('{0} a week', (engine.goalRate > 0 ? '+' : '') + engine.goalRate + ' kg') : null} />
+      <div className="lrow"><span className="lrow-m"><span className="lrow-t">{t('Protein per kg')}</span></span>
         <Stepper value={proteinPerKgOf(S)} step={0.1} min={0.8} max={3.5} onChange={v => patch(x => { x.proteinPerKg = Math.round(v * 10) / 10 })} ariaLabel={t('Protein per kg')} /></div>
       <div className="lrow"><span className="lrow-m"><span className="lrow-t">{t('Weekly check-in')}</span>
         <span className="lrow-s">{t('Every Sunday the Coach reads your week and suggests targets.')}</span></span>

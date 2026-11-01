@@ -2346,3 +2346,7 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .nutr-bars { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 64px; margin-top: 10px; }
 .nutr-bar { flex: 1; border-radius: 4px 4px 2px 2px; background: var(--orange); min-height: 2px; }
 .nutr-target { position: absolute; inset-inline: 0; border-top: 2px dashed var(--yellow); pointer-events: none; }
+.seg-none .seg-sel{opacity:0}
+.nutr-sex{width:170px;flex:none}
+.nutr-num{width:110px;height:38px;flex:none}
+.nutr-num .num{text-align:end;font-size:17px}
