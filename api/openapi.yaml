@@ -167,6 +167,8 @@ tags:
       attached to a logged workout. Stored per profile (one quota for both) and named
       by the SHA-256 of its bytes; the state only carries a `MediaRef`. Every route here is a
       404 when the instance runs with `MEDIA_UPLOADS=0`.
+  - name: nutrition
+    description: Food and weigh-ins pushed from Health Connect by HC Webhook.
   - name: coach
     description: >-
       AI Coach: plans, reviews and debriefs. Every route here answers 503 unless the
@@ -1768,6 +1770,100 @@ paths:
               example: { error: "date must be YYYY-MM-DD", code: "date-invalid" }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /api/nutrition/hc:
+    post:
+      tags: [nutrition]
+      operationId: postNutritionWebhook
+      summary: Meals and weigh-ins from HC Webhook
+      description: |
+        Called by HC Webhook (an Android app) with what it read from Health Connect: the
+        `nutrition` entries a food diary such as Cronometer wrote, `weight` entries, and
+        `deleted` record ids. Authenticated by the `x-api-key` header, a key minted with
+        `POST /api/nutrition/key`; no session. Entries are kept per Health Connect record
+        id, so an edit replaces and a deletion removes.
+      security: [{ nutritionKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Taken in.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  food: { type: integer }
+                  weights: { type: integer }
+                  removed: { type: integer }
+                  skipped: { type: integer }
+        '401':
+          description: No key, or a key that is not (or no longer) valid.
+  /api/nutrition:
+    get:
+      tags: [nutrition]
+      operationId: getNutrition
+      summary: The signed-in profile's daily food totals and imported weigh-ins
+      description: The last 120 days, one row per day, and whether a webhook key is set.
+      responses:
+        '200':
+          description: The feed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected: { type: boolean }
+                  lastAt: { type: [integer, 'null'], description: "When HC Webhook last reached the server (ms)." }
+                  days:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        d: { type: string, format: date }
+                        kcal: { type: integer }
+                        p: { type: integer }
+                        c: { type: integer }
+                        f: { type: integer }
+                        n: { type: integer, description: Entries that day. }
+                  weights:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        d: { type: string, format: date }
+                        kg: { type: number }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [nutrition]
+      operationId: deleteNutrition
+      summary: Disconnect the feed and forget what it brought in
+      responses:
+        '200': { description: Removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/nutrition/key:
+    post:
+      tags: [nutrition]
+      operationId: mintNutritionKey
+      summary: A new webhook key, replacing the old one
+      description: Shown once. Only its hash is kept on the server.
+      responses:
+        '200':
+          description: The key.
+          content:
+            application/json:
+              schema: { type: object, properties: { key: { type: string } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [nutrition]
+      operationId: revokeNutritionKey
+      summary: Revoke the webhook key
+      responses:
+        '200': { description: Revoked. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /api/media/{hash}:
     parameters:
       - name: hash
@@ -3303,6 +3399,11 @@ components:
         Secure); the unprefixed `gymsid` is what a plain-http `localhost` instance
         uses, and is still accepted for pre-upgrade sessions. HttpOnly + SameSite=Lax;
         browser clients never handle the value directly.
+    nutritionKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: The nutrition webhook key from `POST /api/nutrition/key`.
     bearerAuth:
       type: http
       scheme: bearer
