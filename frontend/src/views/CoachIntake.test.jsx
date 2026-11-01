@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CoachIntake from './CoachIntake.jsx'
 import { requestPlan, disclosure } from '../lib/coach-api.js'
 import { CONSENT_VERSION, CATEGORY_TEXT } from '../lib/coach.js'
+import { ENGLISH_ONLY } from '../lib/english-only.js'
 import { setLang } from '../lib/i18n.js'
 import { consentTarget, hasAiConsent, aiConsents, _resetAiConsent } from '../lib/coach-consent.js'
 
@@ -225,7 +226,7 @@ describe('CoachIntake — the consent screen', () => {
   it('lists the built-in categories first, then whatever the server says actually goes', async () => {
     vi.mocked(disclosure).mockResolvedValue({ categories: ['plan', 'prefs'], providerLabel: 'Anthropic', payer: 'you', host: 'api.anthropic.com' })
     mount()
-    expect(all('.ob-consent-row')).toHaveLength(5)                       // CATEGORY_TEXT, before the call lands
+    expect(all('.ob-consent-row')).toHaveLength(6)                       // CATEGORY_TEXT, before the call lands
     await settle()
     expect(all('.ob-consent-row')).toHaveLength(2)
     expect(host.textContent).toContain('Sent straight to api.anthropic.com with your own API key')
@@ -248,7 +249,7 @@ describe('CoachIntake — the consent screen', () => {
     mocks.config = { coach: { enabled: true, providerLabel: 'Claude Agent SDK' } }
     mount(); await settle()
     expect(host.textContent).toContain('Sent to Claude Agent SDK, running on this server')
-    expect(all('.ob-consent-row')).toHaveLength(5)      // and the built-in list stands in
+    expect(all('.ob-consent-row')).toHaveLength(6)      // and the built-in list stands in
 
     act(() => root.unmount())
     mocks.config = { coach: { enabled: true } }
@@ -272,7 +273,8 @@ describe('CoachIntake — the consent screen', () => {
     try {
       mount()
       expect(all('.ob-consent-row').map(r => [r.querySelector('b').textContent, r.querySelector('span').textContent]))
-        .toEqual(english.map(([title, sub]) => [de[title], de[sub]]))
+        // A line left in English on purpose (lib/english-only.js) shows in English.
+        .toEqual(english.map(([title, sub]) => [ENGLISH_ONLY.has(title) ? title : de[title], ENGLISH_ONLY.has(sub) ? sub : de[sub]]))
     } finally { await setLang('en') }
   })
 

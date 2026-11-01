@@ -3,7 +3,7 @@ import {
   canonicalPlan, planHash, hashPlan, markStale, applicable, currentValue, ROUTINE_NAME_SEEN,
   pushSnapshot, revertLast, canRevert, appendLog, applyChangeSet, applyCreatedPlan,
   recordDismissal, validateProposal, coachAvailable, hasConsent,
-  recordDebrief, logEntry, lightBundle, changeValues, defaultTrainingDays,
+  recordDebrief, logEntry, lightBundle, changeValues, changeTitle, defaultTrainingDays,
   CHANGE_TYPES, SNAPSHOT_MAX, LOG_MAX, CONSENT_VERSION
 } from './coach.js'
 import { registerCustom } from './exercises.js'
@@ -196,7 +196,8 @@ describe('staleness', () => {
 describe('applying changes', () => {
   it('has an implementation for every type the server can send', async () => {
     const { CHANGE_TYPES: serverTypes } = await import('../../../api/coach/core/validate.js')
-    expect([...CHANGE_TYPES].sort()).toEqual([...serverTypes].sort())
+    // Plus the one the server builds itself, from the energy engine, never from a model's answer.
+    expect([...CHANGE_TYPES].sort()).toEqual([...serverTypes, 'nutrition-targets'].sort())
   })
 
   it('sets, reps, rep floor, rep ceiling, hold time, load step and policies', () => {
@@ -807,5 +808,37 @@ describe('defaultTrainingDays (the intake pre-selection, #620)', () => {
   it('hands out a copy, so editing one selection never changes the next default', () => {
     defaultTrainingDays(3).push(0)
     expect(defaultTrainingDays(3)).toEqual([1, 3, 5])
+  })
+})
+
+describe('the nutrition check-in', () => {
+  const checkin = (before, after, over = {}) => proposal([{ id: 'n1', type: 'nutrition-targets', target: {}, before, after, why: 'trend slower than goal' }], { kind: 'checkin', ...over })
+
+  it('sets the targets, leaves the plan and the review window alone, and undoes', () => {
+    const S = { ...state(), nutrition: { targets: { kcal: 2400, protein: 115, at: 1, by: 'hand' } } }
+    const s = apply(S, checkin({ kcal: 2400, protein: 115 }, { kcal: 2250, protein: 120 }), ['n1'])
+    expect(s.nutrition.targets).toMatchObject({ kcal: 2250, protein: 120, by: 'checkin' })
+    expect(s.routines).toEqual(S.routines)
+    expect(s.coach.lastReview).toBeUndefined()
+    revertLast(s)
+    expect(s.nutrition.targets).toEqual({ kcal: 2400, protein: 115, at: 1, by: 'hand' })
+  })
+
+  it('is stale once the targets were changed by hand, and fresh when they still match', () => {
+    const S = { ...state(), nutrition: { targets: { kcal: 2400, protein: 115 } } }
+    expect(markStale(checkin({ kcal: 2400, protein: 115 }, { kcal: 2250, protein: 120 }), S).changes[0].status).toBe('proposed')
+    expect(markStale(checkin({ kcal: 2300, protein: 115 }, { kcal: 2250, protein: 120 }), S).changes[0].status).toBe('stale')
+    expect(markStale(checkin(null, { kcal: 2250, protein: 120 }), { ...state() }).changes[0].status).toBe('proposed')
+  })
+
+  it('refuses a target outside 800 to 8000 kcal, whole change set', () => {
+    const S = state()
+    expect(() => apply(S, checkin(null, { kcal: 300, protein: 50 }), ['n1'])).toThrow()
+  })
+
+  it('reads as one line on the card', () => {
+    const c = { type: 'nutrition-targets', before: { kcal: 2400, protein: 115 }, after: { kcal: 2250, protein: 120 } }
+    expect(changeTitle(c)).toBe('Calorie and protein targets')
+    expect(changeValues(c)).toEqual({ before: '2400 kcal · 115 g', after: '2250 kcal · 120 g' })
   })
 })

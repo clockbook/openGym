@@ -12,6 +12,7 @@
 import * as jobs from './jobs.js';
 import * as cfgStore from './config.js';
 import { isDue } from './core/due.js';
+import { checkinDue } from './core/checkin.js';
 
 // Re-exported so nothing that reached it through this module has to move.
 export { isDue };
@@ -36,6 +37,16 @@ export function startCadence(deps) {
         // expired proposal, which a phone that stays closed never polls for.
         const st = jobs.status(user.id);
         if (st.job || st.pending) continue;
+        // The weekly nutrition check-in, Sundays where the person is, before any plan review.
+        const ctz = S.reminder?.tz || 'UTC';
+        const cnow = deps.userNow(ctz);
+        const lastAt = jobs.readUser(user.id).lastCheckinAt;
+        const lastDay = lastAt ? jobs.localToday(S, new Date(lastAt)) : '';
+        if (checkinDue(S, cnow, lastDay)) {
+          jobs.enqueue(user.id, { kind: 'checkin', trigger: 'scheduled' });
+          console.log('coach: weekly check-in queued for', user.id);
+          continue;
+        }
         // Reviewed means the model read those workouts and answered — with a proposal, with
         // "nothing to change", or with an answer that failed validation and was paid for all the
         // same. A call that never reached it (timeout, no runtime, consent, switched off) is retried.

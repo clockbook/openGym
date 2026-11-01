@@ -118,4 +118,11 @@ export const ASK_SCHEMA = {
   required: ['coach_contract', 'answer']
 };
 
-export const SCHEMAS = { review: REVIEW_SCHEMA, create: CREATE_SCHEMA, refine: CREATE_SCHEMA, debrief: DEBRIEF_SCHEMA, ask: ASK_SCHEMA };
+// The weekly nutrition check-in: words only. The numbers are the engine's (checkin.js).
+export const CHECKIN_SCHEMA = {
+  type: 'object',
+  properties: { coach_contract: { type: 'integer' }, summary: STR, why: STR, notes: STRINGS },
+  required: ['coach_contract', 'summary']
+};
+
+export const SCHEMAS = { review: REVIEW_SCHEMA, create: CREATE_SCHEMA, refine: CREATE_SCHEMA, debrief: DEBRIEF_SCHEMA, ask: ASK_SCHEMA, checkin: CHECKIN_SCHEMA };

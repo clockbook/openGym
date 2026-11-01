@@ -375,7 +375,7 @@ describe('coach-demo — the disclosure', () => {
   it('names exactly the categories the consent screen is built from', () => {
     expect(demoDisclosure()).toEqual({
       provider: 'demo', providerLabel: 'the configured AI provider',
-      categories: [...DATA_CATEGORIES], version: 1
+      categories: DATA_CATEGORIES.filter(c => c !== 'nutrition'), version: 1
     })
   })
 })

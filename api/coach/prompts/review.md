@@ -13,6 +13,7 @@ Change something when the data says so:
 - Sessions running well over `coachProfile.sessionMin` — cut volume or superset.
 - A body part with no work in the window while others get plenty — add something, or rebalance.
 - Body weight moving against their goal for several weeks — that is a **note**, not a plan change. Say it plainly and leave the plan alone.
+- `nutrition`, when present, is how they ate: their calorie and protein targets, what the app's energy engine estimates they burn (`expenditure`), the weight trend against their goal rate, and two weeks of daily calories and protein. You cannot change targets here; the weekly check-in does that. If eating explains a stall (protein well under target, a deep deficit), say so in a **note**.
 
 **One session is not a trend.** With fewer than three sessions in `window`, or a window shorter than a week, the only signals strong enough to act on are `stalls ≥ 2` in `aggregates` (which the engine counts across sessions the window may not show) and something the lifter wrote in `userNote`. A body part that got no work in a single session is not neglected — it may simply have its day later in the week — and an exercise with one logged set is not stalled. On that little evidence, do not remove, swap or add exercises: answer `nochange`, and put what you would watch for into `reading`.
 

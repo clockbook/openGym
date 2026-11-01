@@ -26,7 +26,7 @@ import { queueOf } from './queue.js'
 // Bumping this re-prompts everyone: it means what we share, or who we share it with, changed.
 // 2: the training line names the session notes, which the payload carries and version 1 never
 // mentioned.
-export const CONSENT_VERSION = 2
+export const CONSENT_VERSION = 3
 
 // Bounds. The whole state has to stay inside the server's 5 MB body limit, and a Coach log
 // that grows forever is exactly the kind of thing that eats it invisibly. Worst case here is
@@ -75,7 +75,8 @@ export const CATEGORY_TEXT = {
   training: () => [t('Your logged training'), t('Sets you logged in the review window: weights, reps, times, effort ratings, how long sessions took, and your session notes.')],
   bodyweight: () => [t('Body weight'), t('Weigh-ins from the same window, and your goal weight if you set one.')],
   profile: () => [t('What you tell the Coach'), t('Your intake answers, including any limitations or injuries you describe.')],
-  prefs: () => [t('A few preferences'), t('Your unit, your language and which effort scale you log.')]
+  prefs: () => [t('A few preferences'), t('Your unit, your language and which effort scale you log.')],
+  nutrition: () => [t('What you eat'), t('Daily calories and protein from your food diary, your targets and the estimate of what you burn. Never the foods themselves.')]
 }
 export const hasConsent = S => !!S?.coach?.consent?.agreedAt && S.coach.consent.version === CONSENT_VERSION
 
@@ -164,6 +165,7 @@ export function currentValue(S, change) {
     case 'routine-prog': return r?.prog ?? null
     case 'rename-routine': return r?.name == null ? null : String(r.name).slice(0, ROUTINE_NAME_SEEN)
     case 'week': return [].concat(S.week?.[change.target?.weekday] ?? [])   // routine-id list; [] = rest
+    case 'nutrition-targets': return S.nutrition?.targets ? { kcal: S.nutrition.targets.kcal, protein: S.nutrition.targets.protein ?? null } : null
     default: return undefined            // structural changes have no single scalar to compare
   }
 }
@@ -182,7 +184,12 @@ export function markStale(proposal, S) {
   const changes = (proposal.changes || []).map(c => {
     const r = c.target?.routineId ? findRoutine(S, c.target.routineId) : null
     let stale = false
-    if (c.type !== 'add-routine' && c.type !== 'week' && !r) stale = true
+    if (c.type === 'nutrition-targets') {
+      const cur = currentValue(S, c)
+      const key = v => (v ? `${v.kcal}/${v.protein ?? ''}` : '')
+      if (key(cur) !== key(c.before)) stale = true
+    }
+    else if (c.type !== 'add-routine' && c.type !== 'week' && !r) stale = true
     else if (c.target?.exId && !findEx(r, c.target.exId)) stale = true
     else if (c.type === 'week') {
       // The day's value is a routine-id list; `before` may be a list (a combined day) or a
@@ -262,7 +269,9 @@ export function pushSnapshot(s, proposalId, label) {
   const c = coachOf(s)
   c.snapshots = [...(c.snapshots || []), {
     at: Date.now(), proposalId: proposalId || null, label: label || '',
-    routines: clone(s.routines || []), week: clone(s.week || {})
+    routines: clone(s.routines || []), week: clone(s.week || {}),
+    // The calorie and protein targets a check-in can change, so its Undo puts them back too.
+    nutritionTargets: s.nutrition?.targets ? clone(s.nutrition.targets) : null
   }].slice(-SNAPSHOT_MAX)
   trim(s)
 }
@@ -282,6 +291,11 @@ export function revertLast(s) {
   s.week = clone(snap.week)
   // Snapshots taken before this field existed have nothing to put back.
   if (snap.dayPlanRestore) Object.assign(s.dayPlan, snap.dayPlanRestore)
+  if ('nutritionTargets' in snap) {
+    const n = { ...(s.nutrition || {}) }
+    if (snap.nutritionTargets) n.targets = clone(snap.nutritionTargets); else delete n.targets
+    s.nutrition = n
+  }
   // A created plan that took over the rotation (useInRotation) gives the old loop and its pass back.
   if (snap.rotationRestore) {
     s.rotation = clone(snap.rotationRestore.rotation)
@@ -571,6 +585,12 @@ const CHANGE_APPLY = {
     recordDayPlanDrops(s, deleteRoutine(s, c.target.routineId))
   },
   'rename-routine': (s, c) => { need(findRoutine(s, c.target.routineId)).name = c.after },
+  // From the weekly check-in: the engine's numbers, never the model's (api/coach/checkin.js).
+  'nutrition-targets': (s, c) => {
+    const kcal = Math.round(Number(c.after?.kcal)), protein = c.after?.protein == null ? null : Math.round(Number(c.after.protein))
+    if (!(kcal >= 800 && kcal <= 8000)) throw new Error('bad target')
+    s.nutrition = { ...(s.nutrition || {}), targets: { kcal, protein, at: Date.now(), by: 'checkin' } }
+  },
   week: (s, c) => {
     // A single-routine op: the slot is a list, but the Coach only ever names one routine (or
     // rest), and it replaces the day. This collapses a combined day to one routine — the same
@@ -616,7 +636,8 @@ export function applyChangeSet(s, proposal, acceptedIds) {
     summary: proposal.summary || '', evidence: proposal.evidence || null,
     notes: proposal.notes || [], decisions: [...applied, ...rejected]
   })
-  coachOf(s).lastReview = { at: Date.now() }
+  // A nutrition check-in read no training, so the plan review's window does not restart.
+  if (proposal.kind !== 'checkin') coachOf(s).lastReview = { at: Date.now() }
   return { applied: applied.length, rejected: rejected.length, logId }
 }
 
@@ -629,7 +650,7 @@ export function recordDismissal(s, proposal) {
     ...(proposal.bundle ? { bundle: lightBundle(proposal.bundle), iteration: proposal.iteration || 1 } : {}),
     decisions: (proposal.changes || []).map(c => decisionOf(c, 'rejected'))
   })
-  if (proposal.kind !== 'create') coachOf(s).lastReview = { at: Date.now() }
+  if (proposal.kind !== 'create' && proposal.kind !== 'checkin') coachOf(s).lastReview = { at: Date.now() }
   return logId
 }
 
@@ -673,6 +694,7 @@ export function changeTitle(c, S) {
     case 'remove-routine': return t('Remove a routine')
     case 'rename-routine': return t('Rename routine to “{0}”', c.after)
     case 'week': return Number.isInteger(c.target?.weekday) ? t('{0}: what’s planned', t(DAYN[c.target.weekday])) : t('Change what’s planned on one day')
+    case 'nutrition-targets': return t('Calorie and protein targets')
     default: return c.type
   }
 }
@@ -684,6 +706,10 @@ export function changeValues(c, S) {
     // `week` first — its value is a routine-id list (an array is also an object, so it has to
     // win before the generic branches). Render as " + "-joined routine names; null / empty /
     // "rest" all read as Rest.
+    if (c.type === 'nutrition-targets') {
+      if (!v || typeof v !== 'object') return t('Not set')
+      return `${v.kcal} kcal` + (v.protein != null ? ` · ${v.protein} g` : '')
+    }
     if (c.type === 'week') {
       const ids = [].concat(v ?? []).filter(x => x && x !== 'rest')
       return ids.length ? ids.map(routineName).join(' + ') : t('Rest')

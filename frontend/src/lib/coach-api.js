@@ -91,6 +91,9 @@ const _refinePlan = async text => DEMO ? (await demo()).demoRefine(S()) : LOCAL(
 export const refinePlan = (...a) => asked(_refinePlan)(...a).then(track)
 const _requestDebrief = async workoutId => DEMO ? (await demo()).demoDebrief(S(), workoutId) : LOCAL() ? (await local()).localDebrief(S(), workoutId) : api('/api/coach/debrief', { method: 'POST', body: JSON.stringify({ workoutId: workoutId || null, lang: getLang() }) })
 export const requestDebrief = (...a) => asked(_requestDebrief)(...a).then(track)
+// The weekly nutrition check-in, now. Server only: the food feed lives there.
+const _requestCheckin = async () => api('/api/coach/checkin', { method: 'POST', body: JSON.stringify({ lang: getLang() }) })
+export const requestCheckin = (...a) => asked(_requestCheckin)(...a).then(track)
 // A question in the chat, answered in words (the `ask` job). The session running here goes along
 // (lib/coach-context.js): the server never holds it.
 const _askCoach = async text => DEMO ? (await demo()).demoAsk(S(), text) : LOCAL() ? (await local()).localAsk(S(), text, todayForCoach(S())) : api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ text, today: todayForCoach(S()), lang: getLang() }) })

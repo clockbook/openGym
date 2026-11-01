@@ -28,6 +28,9 @@ import { handleFor } from './handle.js';
 import { fetchFor } from './node-fetch.js';
 import { privilegeRefusal, unprivilegedIds } from './adapters/spawn.js';
 import { cohortForPayload, invalidate as invalidateCohort } from './cohort.js';
+import { createNutrition, dailyTotals, dailyWeights } from '../nutrition.js';
+import { runEngine, mergeWeighIns, addDays } from './core/energy.js';
+import { checkinPayload, checkinResult } from './core/checkin.js';
 
 // The prompt assembly, the plan fingerprint and the invoke→parse→validate→repair loop all
 // live in ./core now, where the phone can import them too. Re-exported so nothing that
@@ -45,6 +48,49 @@ const PENDING_DAYS = 14;           // FR-33
 const HISTORY_MAX = 20;
 
 /* ---------- per-user store ---------- */
+
+/* ---------- nutrition: the food feed and the energy engine over it ---------- */
+
+const nutritionStore = createNutrition(DATA);
+
+/** Today where the person is, as an ISO date. */
+export function localToday(S, now = new Date()) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: S?.reminder?.tz || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  } catch { return now.toISOString().slice(0, 10); }
+}
+
+/** The feed's daily totals and the engine's result for a profile, or { engine: null }. */
+export function nutritionFor(uid, S, today = localToday(S)) {
+  const store = nutritionStore.read(uid);
+  const from = addDays(today, -400);
+  const days = dailyTotals(store, from, null, { main: S?.nutrition?.main || null });
+  const n = S?.nutrition || {};
+  const engine = runEngine({
+    days,
+    weighIns: mergeWeighIns(S?.bodyweight, S?.unit, dailyWeights(store, from)),
+    stats: n.stats || {},
+    goal: { rateGoal: S?.rateGoal, targetW: S?.targetW, unit: S?.unit },
+    proteinPerKg: n.proteinPerKg,
+    today
+  });
+  return { days, engine, today };
+}
+
+/** What a review or a chat question carries about eating: a short summary, never the meals. */
+function nutritionSummary(uid, S) {
+  if (!S?.nutrition || typeof S.nutrition !== 'object') return null;
+  const { days, engine, today } = nutritionFor(uid, S);
+  if (!engine) return null;
+  const from = addDays(today, -14);
+  return {
+    targets: S.nutrition.targets ? { kcal: S.nutrition.targets.kcal, protein: S.nutrition.targets.protein ?? null } : null,
+    expenditure: engine.expenditure, confidence: engine.confidence,
+    trendKg: engine.trendKg, actualRateKgPerWeek: engine.actualRate, goalRateKgPerWeek: engine.goalRate,
+    last7: engine.last7,
+    days: days.filter(d => d.d >= from && d.d < today).map(d => ({ d: d.d, kcal: d.kcal, p: d.p }))
+  };
+}
 
 const safe = uid => String(uid).replace(/[^a-zA-Z0-9_-]/g, '');
 const userFile = uid => path.join(COACH_DIR, safe(uid) + '.json');
@@ -240,7 +286,7 @@ export function enqueue(uid, opts) {
     id: crypto.randomBytes(8).toString('hex'),
     uid,
     forgetSeq: forgetSeq.get(uid) || 0,
-    kind: opts.kind,                                  // 'create' | 'review' | 'debrief' | 'ask'
+    kind: opts.kind,                                  // 'create' | 'review' | 'debrief' | 'ask' | 'checkin'
     trigger: opts.trigger || 'manual',                // 'manual' | 'scheduled'
     workoutId: opts.workoutId ? String(opts.workoutId).slice(0, 40) : null,
     intake: opts.intake || null,
@@ -302,7 +348,10 @@ function finish(job, result) {
     ...rec,
     current: null,
     pending: result.pending !== undefined ? result.pending : rec.pending,
-    history
+    history,
+    // The Sunday check-in runs once a day at most (cadence.js); kept apart from `history`, which
+    // twenty chat questions would push it out of.
+    ...(job.kind === 'checkin' && (result.outcome === 'ready' || result.outcome === 'nochange') ? { lastCheckinAt: Date.now() } : {})
   });
   if (result.outcome === 'ready' && onProposal) {
     try { onProposal(job.uid, result.pending, job); } catch (e) { console.error('coach notify failed', e); }
@@ -339,8 +388,18 @@ async function execute(job) {
     return finish(job, { outcome: 'failed', errorClass: 'noworkout' });
   }
 
+  // A check-in reads the engine's result; without a weigh-in there is nothing to read.
+  const nutri = job.kind === 'checkin' ? nutritionFor(job.uid, S) : null;
+  if (nutri && !nutri.engine) {
+    return finish(job, { outcome: 'nochange', pending: null, detail: null, reading: 'Log a weigh-in first: the check-in needs at least one to work from.' });
+  }
+
   const pendingCreate = job.refine ? readUser(job.uid).pending : null;
-  const payload = payloadLib.build(S, {
+  const payload = nutri ? checkinPayload(S, nutri.engine, {
+    handle: handleFor(job.uid), lang: job.lang || (S.langAuto === true ? payloadLib.langTag(process.env.DEFAULT_LANG) : null),
+    days: nutri.days, today: nutri.today,
+    sessions: (S.workouts || []).filter(w => w && w.d && w.d >= addDays(nutri.today, -14)).length
+  }) : payloadLib.build(S, {
     handle: handleFor(job.uid),
     kind: job.kind,
     intake: job.intake,
@@ -354,7 +413,9 @@ async function execute(job) {
     lang: job.lang || (S.langAuto === true ? payloadLib.langTag(process.env.DEFAULT_LANG) : null),
     // The room's medians ride along on a review or a debrief when the admin allows it and
     // this person opted in; null otherwise, and the payload then carries no `cohort` at all.
-    cohort: (job.kind === 'review' || job.kind === 'debrief') ? cohortForPayload(job.uid) : null
+    cohort: (job.kind === 'review' || job.kind === 'debrief') ? cohortForPayload(job.uid) : null,
+    // A review or a question can see how eating and weight went (never the meals themselves).
+    nutrition: (job.kind === 'review' || job.kind === 'ask') ? nutritionSummary(job.uid, S) : null
   });
   // The payload is paid for with the instance's key, and it is built from state the client
   // wrote. The builder bounds each field; a payload that is still bigger than any real training
@@ -386,6 +447,17 @@ async function execute(job) {
     }
     if (attempt.nochange) {
       return finish(job, { outcome: 'nochange', pending: null, detail: null, reading: attempt.reading });
+    }
+    // The model wrote the words; the targets on the card are the engine's.
+    if (nutri) {
+      const r = checkinResult(S, nutri.engine, attempt.result, nutri.today);
+      if (r.nochange) return finish(job, { outcome: 'nochange', pending: null, detail: null, reading: r.reading });
+      return finish(job, { outcome: 'ready', pending: {
+        id: job.id, kind: 'checkin', createdAt: Date.now(), expiresAt: Date.now() + PENDING_DAYS * 86400000,
+        planHash: null, iteration: 1,
+        ...(job.trigger === 'scheduled' ? { trigger: 'scheduled' } : {}),
+        ...r.proposal
+      } });
     }
     const pending = {
       id: job.id,

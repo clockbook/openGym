@@ -31,7 +31,7 @@ import {
   changeTitle, changeValues, exName, canRevert, revertLast
 } from '../lib/coach.js'
 import { insightsFor, sessionInsights } from '../lib/coach-insights.js'
-import { useCoachStatus, requestReview, requestDebrief, requestPlan, refinePlan, askCoach, resolvePending, cohortStats, setCohortShare, jobErrorText, awaitedJob, settleAwaited, JOB_ERRORS, ensureAiConsent, isDeclined } from '../lib/coach-api.js'
+import { useCoachStatus, requestReview, requestDebrief, requestCheckin, requestPlan, refinePlan, askCoach, resolvePending, cohortStats, setCohortShare, jobErrorText, awaitedJob, settleAwaited, JOB_ERRORS, ensureAiConsent, isDeclined } from '../lib/coach-api.js'
 import { AiConsentSection } from '../components/CoachConsentSheet.jsx'
 import { useCoachGate } from '../lib/use-coach-gate.js'
 import { confirmSheet } from '../sheets.jsx'
@@ -162,6 +162,7 @@ export default function CoachChat() {
   const askDebrief = () => ask(() => requestDebrief(lastWorkout?.id || null), lastWorkout?.name
     ? t('How did my {0} session go?', lastWorkout.name)
     : t('How did my last workout go?'))
+  const askCheckin = () => ask(() => requestCheckin(), t('Do my nutrition check-in.'))
   const askNewPlan = () => ask(() => requestPlan(coach.profile), t('Build me a fresh plan from my answers.'))
   const askImprove = r => ask(
     () => requestReview(t('Focus only on my routine “{0}”. Improve it: exercise choice, order, sets and reps, rep ranges, progression. Leave the other routines alone.', r.name)),
@@ -246,6 +247,7 @@ export default function CoachChat() {
         {!!lastWorkout && <button className="qchip" onClick={askDebrief}><Icon name="checkCircle" />{t('Last workout')}</button>}
         {!!(S.routines || []).length && <button className="qchip" onClick={pickRoutine}><Icon name="wrench" />{t('Improve a routine')}</button>}
         {community && <button className="qchip" onClick={showCohort}><Icon name="person" />{t('Compare')}</button>}
+        {S.nutrition && !DEMO && !(MOBILE && coachMode === 'byok') && <button className="qchip" onClick={askCheckin}><Icon name="flame" />{t('Nutrition check-in')}</button>}
       </div>}
       <div className={'composer-in' + (expanded ? ' tall' : '')}>
         <ChatInput value={text} onChange={setText} onSend={send} placeholder={placeholder} disabled={!!job}
@@ -310,7 +312,7 @@ function Typing({ S, kind, coachLocal, config }) {
     // local model rather than something wrong; the next line already warns it takes longer.
     eta = local ? '' : t('This usually takes a minute or two.')
   }
-  const doing = kind === 'create' ? t('Building your plan…') : kind === 'debrief' ? t('Looking at that session…') : kind === 'ask' ? t('Thinking about your question…') : t('Reading your training…')
+  const doing = kind === 'create' ? t('Building your plan…') : kind === 'debrief' ? t('Looking at that session…') : kind === 'ask' ? t('Thinking about your question…') : kind === 'checkin' ? t('Reading your week of eating…') : t('Reading your training…')
   return <div className="msg coach">
     <div className="bub typing"><i /><i /><i /></div>
     <div className="typing-eta">

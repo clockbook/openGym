@@ -17,6 +17,8 @@ export const PAGES = {
   equipment: { title: 'Equipment', icon: 'kettlebell', tint: 'var(--indigo)' },
   look: { title: 'Look & Home', icon: 'palette', tint: 'var(--purple)' },
   coach: { title: 'AI Coach', icon: 'sparkles', tint: 'var(--green)' },
+  // Food from Health Connect (HC Webhook), body stats and the calorie and protein targets.
+  nutrition: { title: 'Nutrition', icon: 'flame', tint: 'var(--orange)' },
   watch: { title: 'Apple Watch', icon: 'watch', tint: 'var(--grey)' },
   data: { title: 'Data & backup', icon: 'folder', tint: 'var(--blue)' },
   about: { title: 'About & updates', icon: 'info', tint: 'var(--grey)' },
@@ -31,7 +33,7 @@ export const PAGES = {
 export const PAGE_IDS = Object.keys(PAGES)
 
 // The root, top to bottom. Whether a row shows is pageVisible's call.
-export const ROOT_GROUPS = [['workout', 'alerts', 'reminders'], ['plan', 'units', 'equipment'], ['look', 'coach', 'watch'], ['data', 'about']]
+export const ROOT_GROUPS = [['workout', 'alerts', 'reminders'], ['plan', 'units', 'equipment'], ['look', 'coach', 'nutrition', 'watch'], ['data', 'about']]
 
 /**
  * Whether a page exists for this device and profile. Reminders need a push server (signed in) or
@@ -41,6 +43,8 @@ export const ROOT_GROUPS = [['workout', 'alerts', 'reminders'], ['plan', 'units'
 export function pageVisible(page, ctx) {
   if (page === 'reminders') return !!(ctx.user || ctx.mobile)
   if (page === 'coach') return !!ctx.mobile
+  // The food feed lives on the server: a signed-in profile only.
+  if (page === 'nutrition') return !!ctx.user
   // The iPhone app only: the watch app ships inside it.
   if (page === 'watch') return !!ctx.ios
   // The phone app only: a browser cannot watch where you are with the page closed.
@@ -134,6 +138,11 @@ export const SEARCH = [
   { page: 'themes', title: 'Spooky colors', icon: 'palette', tint: 'var(--purple)', kw: 'halloween orange purple accent color colour seasonal' },
   { page: 'look', title: 'Show connection status', icon: 'cloud', tint: 'var(--blue)', kw: 'sync offline banner bar connection', when: c => !c.demo },
   // Data & backup
+  // Nutrition
+  { page: 'nutrition', title: 'Health Connect feed', icon: 'cloud', tint: 'var(--blue)', kw: 'cronometer macrofactor food diary nutrition calories hc webhook sync', when: c => !!c.user },
+  { page: 'nutrition', title: 'Set targets by hand', icon: 'pencil', tint: 'var(--blue)', kw: 'calories kcal protein target macros diet', when: c => !!c.user },
+  { page: 'nutrition', title: 'Protein per kg', icon: 'bolt', tint: 'var(--purple)', kw: 'protein grams macros', when: c => !!c.user },
+  { page: 'nutrition', title: 'Weekly check-in', icon: 'calendar', tint: 'var(--green)', kw: 'check in sunday expenditure tdee calories', when: c => !!c.user },
   { page: 'data', title: 'Export backup (JSON)', icon: 'share', tint: 'var(--blue)', kw: 'export backup json download save' },
   { page: 'data', title: 'Export with photos & videos (.zip)', icon: 'share', tint: 'var(--blue)', kw: 'zip media export backup', when: c => c.hasMedia },
   { page: 'data', title: 'Performance report (PDF)', icon: 'note', tint: 'var(--green)', kw: 'pdf print report performance progress summary charts export paper' },

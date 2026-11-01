@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { PAGES, PAGE_IDS, ROOT_GROUPS, SEARCH, pageVisible, searchSettings, pageTrail, fold } from './settings-pages.js'
+import { ENGLISH_ONLY } from '../lib/english-only.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -482,7 +483,7 @@ describe('searchSettings', () => {
 describe('translations', () => {
   const packs = import.meta.glob('../locales/*.js', { eager: true, import: 'default' })
   it('every page and searchable row title has a word in each pack', () => {
-    const keys = [...new Set([...PAGE_IDS.map(id => PAGES[id].title), ...SEARCH.map(e => e.title)])]
+    const keys = [...new Set([...PAGE_IDS.map(id => PAGES[id].title), ...SEARCH.map(e => e.title)])].filter(k => !ENGLISH_ONLY.has(k))
     for (const [file, pack] of Object.entries(packs)) {
       const missing = keys.filter(k => !Object.hasOwn(pack, k) || !String(pack[k]).trim())
       expect(missing, file).toEqual([])

@@ -2341,3 +2341,8 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .gym-radius-row>:first-child{flex:1}
 .gym-radius-val{min-width:64px;text-align:end;font-variant-numeric:tabular-nums;color:var(--label-2)}
 .gym-actions{display:flex;flex-direction:column;gap:10px;margin:4px 0 30px}
+
+/* Nutrition card on Home (components/NutritionCard.jsx): seven days of calories against the target. */
+.nutr-bars { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 64px; margin-top: 10px; }
+.nutr-bar { flex: 1; border-radius: 4px 4px 2px 2px; background: var(--orange); min-height: 2px; }
+.nutr-target { position: absolute; inset-inline: 0; border-top: 2px dashed var(--yellow); pointer-events: none; }

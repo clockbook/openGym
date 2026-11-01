@@ -53,7 +53,9 @@ for (const file of readdirSync(localesDir).filter(f => f.endsWith('.js'))) {
   for (const key of Object.keys(pack)) defined.add(key)
 }
 
-const missing = [...used.keys()].filter(k => !defined.has(k)).sort()
+// Left in English on purpose (src/lib/english-only.js).
+const { ENGLISH_ONLY } = await import(pathToFileURL(join(srcDir, 'lib', 'english-only.js')).href)
+const missing = [...used.keys()].filter(k => !defined.has(k) && !ENGLISH_ONLY.has(k)).sort()
 
 if (!missing.length) {
   console.log(`${used.size} translated strings in src/, all present in the locale packs.`)

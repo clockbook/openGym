@@ -16,6 +16,7 @@ import { SCHEMAS } from './schemas.js';
 import { extractJSON, contractOK } from './parse.js';
 import { validatePlan, validateReview, validateDebrief, validateAsk } from './validate.js';
 import { isChangeList, changesOntoPlan } from './refine-changes.js';
+import { validateCheckin } from './checkin.js';
 
 /**
  * One attempt: prompt → provider → parse → validate.
@@ -79,6 +80,8 @@ export async function attemptOnce({ adapter, cfg, kind, payload, model, timeoutM
       ? validateDebrief(parsed.value)
       : kind === 'ask'
       ? validateAsk(parsed.value)
+      : kind === 'checkin'
+      ? validateCheckin(parsed.value)
       : validatePlan(answer, {
       customIds, equipment, offered, noDumbbells,
       workingWeights: payload.history?.workingWeights,

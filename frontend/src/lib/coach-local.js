@@ -149,7 +149,8 @@ export async function localDisclosure() {
   const base = d.provider ? baseUrlFor(d.provider, cfgOf(d)) : ''
   return {
     provider: d.provider, providerLabel: meta.label || t('the configured AI provider'),
-    categories: payloadLib.DATA_CATEGORIES, version: 1,
+    // No food feed on the phone: its own-key Coach never sends nutrition.
+    categories: payloadLib.DATA_CATEGORIES.filter(c => c !== 'nutrition'), version: 1,
     // The honest difference from the self-hosted flow: it is the user's own account.
     payer: 'you', host: hostOf(base)
   }

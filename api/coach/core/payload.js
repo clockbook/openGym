@@ -615,6 +615,18 @@ export function build(S, opts = {}) {
       p.userNote = String(opts.refine).slice(0, MAX_NOTE_CHARS);
     }
   }
+  // Eating and weight from the nutrition feed, summarised on the server (jobs.js): targets, the
+  // engine's reading and two weeks of daily calories and protein. Bounded again here.
+  if ((opts.kind === 'review' || opts.kind === 'ask') && opts.nutrition && typeof opts.nutrition === 'object') {
+    const n = opts.nutrition;
+    p.nutrition = {
+      targets: n.targets ? { kcal: num(n.targets.kcal) ?? null, protein: num(n.targets.protein) ?? null } : null,
+      expenditure: num(n.expenditure) ?? null, confidence: word(n.confidence, 12),
+      trendKg: num(n.trendKg) ?? null, actualRateKgPerWeek: num(n.actualRateKgPerWeek) ?? null, goalRateKgPerWeek: num(n.goalRateKgPerWeek) ?? null,
+      last7: n.last7 ? { days: num(n.last7.days) ?? 0, kcal: num(n.last7.kcal) ?? null, protein: num(n.last7.protein) ?? null } : null,
+      days: list(n.days).slice(-14).map(d => ({ d: day(d?.d), kcal: num(d?.kcal) ?? null, p: num(d?.p) ?? null }))
+    };
+  }
   if (opts.kind !== 'debrief') {
     const said = conversation(coach, [opts.note, opts.refine]);
     if (said.length) p.conversation = said;
