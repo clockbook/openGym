@@ -150,6 +150,8 @@
 .pcard-chg-t{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .pcard-chg-v{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:13px}
 .pcard-chg-v .tag{font-size:12px}
+/* kcal and g stay lower case: .tag capitalises the routine and exercise names it usually holds. */
+.pcard-chg-v.units .tag{text-transform:none}
 .pcard-chg-w{font-size:13px;color:var(--label-2);line-height:1.42}
 .pcard-chg-stale{font-size:12px;color:var(--yellow);margin-top:4px}
 .pcard-notes{padding:10px 18px 4px;border-top:var(--hair) solid var(--sep)}

@@ -452,7 +452,8 @@ function ReviewCard({ p, S, update, toast, refresh }) {
         </p>}
       </div>
 
-      <Insights S={S} window={marked.evidence} />
+      {/* A nutrition check-in read no training: the training overview is a plan review's. */}
+      {marked.kind !== 'checkin' && <Insights S={S} window={marked.evidence} />}
 
       {marked.changes.map(c => {
         const stale = c.status === 'stale'
@@ -479,7 +480,7 @@ function ChangeRow({ c, S, stale, badge, children }) {
   return <div className={'pcard-chg' + (stale ? ' stale' : '') + (c.status === 'rejected' ? ' declined' : '')}>
     <div className="grow">
       <div className="pcard-chg-t">{changeTitle(c, S)}{c.routineName ? <span className="dim" style={{ fontWeight: 400 }}> · {c.routineName}</span> : null}</div>
-      {vals && <div className="pcard-chg-v"><span className="tag">{vals.before}</span><Icon name="chevronRight" style={{ fontSize: 12, color: 'var(--label-3)' }} /><span className="tag acc">{vals.after}</span></div>}
+      {vals && <div className={'pcard-chg-v' + (c.type === 'nutrition-targets' ? ' units' : '')}><span className="tag">{vals.before}</span><Icon name="chevronRight" style={{ fontSize: 12, color: 'var(--label-3)' }} /><span className="tag acc">{vals.after}</span></div>}
       <div className="pcard-chg-w">{c.why}</div>
       {stale && <div className="pcard-chg-stale">{t('Doesn’t match your plan any more, so it can’t be applied.')}</div>}
     </div>
