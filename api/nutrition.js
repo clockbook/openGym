@@ -187,18 +187,63 @@ export function prune(s, now = Date.now()) {
   }
 }
 
-/** Daily totals between two days (inclusive, either may be null): [{ d, kcal, p, c, f, n }]. */
-export function dailyTotals(s, from = null, to = null) {
-  const days = new Map();
+// Apps a food diary can be. Shown in Settings by name; anything else is shown by its package.
+export const KNOWN_SOURCES = Object.freeze({
+  'com.cronometer.android.gold': 'Cronometer',
+  'com.cronometer.android': 'Cronometer',
+  'com.sbs.diet': 'MacroFactor',
+  'com.myfitnesspal.android': 'MyFitnessPal',
+  'com.sec.android.app.shealth': 'Samsung Health',
+  'com.fitbit.FitbitMobile': 'Fitbit',
+  'com.google.android.apps.fitness': 'Google Fit'
+});
+// The main diary when the profile has not picked one: Cronometer, by package name.
+const DEFAULT_MAIN = /cronometer/i;
+
+/**
+ * Daily totals between two days (inclusive, either may be null): [{ d, kcal, p, c, f, n, src }].
+ *
+ * One app per day. Two diaries connected to Health Connect at once (Cronometer and the MacroFactor
+ * someone is moving away from) would otherwise add the same lunch up twice. A day takes its
+ * entries from the profile's main diary (`main`, a package name) when that app has any, else
+ * from Cronometer, else from whichever app wrote the most entries that day.
+ */
+export function dailyTotals(s, from = null, to = null, { main = null } = {}) {
+  const days = new Map();   // day → Map(src → totals)
   for (const r of Object.values(s?.food || {})) {
     if (!r?.d || (from && r.d < from) || (to && r.d > to)) continue;
-    const t = days.get(r.d) || { d: r.d, kcal: 0, p: 0, c: 0, f: 0, n: 0 };
+    const bySrc = days.get(r.d) || new Map();
+    const src = r.src || '';
+    const t = bySrc.get(src) || { kcal: 0, p: 0, c: 0, f: 0, n: 0 };
     t.kcal += r.kcal || 0; t.p += r.p || 0; t.c += r.c || 0; t.f += r.f || 0; t.n++;
-    days.set(r.d, t);
+    bySrc.set(src, t);
+    days.set(r.d, bySrc);
   }
-  return [...days.values()]
-    .map(t => ({ d: t.d, kcal: Math.round(t.kcal), p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f), n: t.n }))
-    .sort((a, b) => (a.d < b.d ? -1 : 1));
+  const pick = bySrc => {
+    const srcs = [...bySrc.keys()];
+    if (main && bySrc.has(main)) return main;
+    const cron = srcs.find(x => DEFAULT_MAIN.test(x));
+    if (cron != null) return cron;
+    return srcs.sort((a, b) => bySrc.get(b).n - bySrc.get(a).n || (a < b ? -1 : 1))[0];
+  };
+  return [...days].map(([d, bySrc]) => {
+    const src = pick(bySrc), t = bySrc.get(src);
+    return { d, kcal: Math.round(t.kcal), p: Math.round(t.p), c: Math.round(t.c), f: Math.round(t.f), n: t.n, src: src || null };
+  }).sort((a, b) => (a.d < b.d ? -1 : 1));
+}
+
+/** The apps that have sent food: [{ src, name, entries, first, last }], most recent first. */
+export function foodSources(s) {
+  const by = new Map();
+  for (const r of Object.values(s?.food || {})) {
+    const src = r?.src || '';
+    const x = by.get(src) || { src: src || null, name: KNOWN_SOURCES[src] || src || null, entries: 0, first: r.d, last: r.d };
+    x.entries++;
+    if (r.d < x.first) x.first = r.d;
+    if (r.d > x.last) x.last = r.d;
+    by.set(src, x);
+  }
+  return [...by.values()].sort((a, b) => (a.last < b.last ? 1 : -1));
 }
 
 /** Weigh-ins from Health Connect, the latest of each day: [{ d, kg }]. */

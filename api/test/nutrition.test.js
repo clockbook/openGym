@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createNutrition, localDay, applyPayload, dailyTotals, dailyWeights } from '../nutrition.js';
+import { createNutrition, localDay, applyPayload, dailyTotals, dailyWeights, foodSources } from '../nutrition.js';
 
 // The shape HC Webhook sends (docs/webhook.md in its repo), trimmed to the fields used.
 const meal = (id, start, kcal, p, extra = {}) => ({
@@ -75,4 +75,20 @@ test('keys: minted, hashed on disk, replaced, and tied to one profile', () => {
   n.remove('u1');
   assert.equal(n.uidForKey(k2), null);
   assert.deepEqual(n.read('u1').food, {});
+});
+
+test('two diaries on one day: the main one counts, the other is not added on top', () => {
+  const s = { food: {}, weights: {} };
+  const at = (id, src, kcal, d = '2026-11-01') => ({ ...meal(id, `${d}T12:00:00+11:00`, kcal, 30), metadata: { id, data_origin: src } });
+  applyPayload(s, { nutrition: [
+    at('m1', 'com.sbs.diet', 700), at('m2', 'com.sbs.diet', 800),
+    at('c1', 'com.cronometer.android.gold', 1600),
+    at('m3', 'com.sbs.diet', 1900, '2026-10-31')
+  ] });
+  // Cronometer wins by default; a day only MacroFactor logged still counts.
+  assert.deepEqual(dailyTotals(s).map(d => [d.d, d.kcal, d.src]), [['2026-10-31', 1900, 'com.sbs.diet'], ['2026-11-01', 1600, 'com.cronometer.android.gold']]);
+  // A profile that made MacroFactor its main diary gets MacroFactor's day.
+  assert.equal(dailyTotals(s, null, null, { main: 'com.sbs.diet' })[1].kcal, 1500);
+  const bySrc = Object.fromEntries(foodSources(s).map(x => [x.name, x.entries]));
+  assert.deepEqual(bySrc, { MacroFactor: 3, Cronometer: 1 });
 });

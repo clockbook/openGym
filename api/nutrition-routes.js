@@ -7,7 +7,7 @@
  * A factory taking server.js's helpers, like coach/routes.js, so this module imports none of the
  * closures over the db and the session secret.
  */
-import { dailyTotals, dailyWeights } from './nutrition.js';
+import { dailyTotals, dailyWeights, foodSources } from './nutrition.js';
 
 const DAYS_BACK = 120;   // enough for a check-in window and the weight-screen card
 
@@ -32,10 +32,12 @@ export function nutritionRoutes({ json, readBody, readSession, readState, store,
       if (!user) return json(res, 401, { error: 'not signed in' });
       const s = store.read(user.id);
       const from = isoDaysAgo(DAYS_BACK);
+      const main = readState(user.id)?.nutrition?.main || null;
       json(res, 200, {
         connected: store.hasKey(user.id),
         lastAt: s.lastAt,
-        days: dailyTotals(s, from),
+        sources: foodSources(s),
+        days: dailyTotals(s, from, null, { main }),
         weights: dailyWeights(s, from)
       });
     },
